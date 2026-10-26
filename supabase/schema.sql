@@ -4,9 +4,12 @@
 --  How to run:
 --    1. Open your Supabase project → SQL Editor → "New query"
 --    2. Paste this whole file and click "Run"
---    3. Create the professor account: Authentication → Users → "Add user"
---       (email + password). That account is the only one allowed to
---       add / edit / delete questions from the /admin dashboard.
+--    3. Create the professor account: Authentication → Users → "Add user".
+--       The login form asks for a UserName + PassCode, which the app maps
+--       to the internal email "<username>@lecture-survivor.com" — so set
+--       that as the user's email and the PassCode as its password. That
+--       account is the only one allowed to add / edit / delete questions
+--       from the /admin dashboard.
 --
 --  This script is safe to run more than once (tables, policies and the
 --  seed questions are only created when missing).

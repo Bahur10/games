@@ -10,7 +10,6 @@ import {
   Loader2,
   Lock,
   LogIn,
-  Mail,
   Play,
   ShieldCheck,
   Timer,
@@ -42,8 +41,8 @@ export default function LoginPage() {
   const [studentError, setStudentError] = useState<string | null>(null);
 
   // Professor form
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
+  const [passcode, setPasscode] = useState("");
   const [professorError, setProfessorError] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState(false);
 
@@ -76,7 +75,7 @@ export default function LoginPage() {
     setProfessorError(null);
     setLoggingIn(true);
     try {
-      await loginProfessor(email.trim(), password);
+      await loginProfessor(username, passcode);
       router.push("/admin");
     } catch (err) {
       setProfessorError(err instanceof Error ? err.message : "Login failed. Please try again.");
@@ -86,7 +85,7 @@ export default function LoginPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <ModeBanner showCredentials />
+      <ModeBanner />
 
       {/* ── Hero ────────────────────────────────────────────────────────── */}
       <div className="animate-fade-up text-center">
@@ -234,35 +233,35 @@ export default function LoginPage() {
         ) : (
           <form onSubmit={handleProfessorSubmit} className="mt-6 space-y-4" noValidate>
             <div>
-              <label htmlFor="prof-email" className="mb-1.5 block text-sm font-medium text-slate-300">
-                Email
+              <label htmlFor="prof-username" className="mb-1.5 block text-sm font-medium text-slate-300">
+                UserName
               </label>
               <div className="relative">
-                <Mail className="pointer-events-none absolute top-1/2 left-3.5 h-5 w-5 -translate-y-1/2 text-slate-500" />
+                <User className="pointer-events-none absolute top-1/2 left-3.5 h-5 w-5 -translate-y-1/2 text-slate-500" />
                 <input
-                  id="prof-email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="professor@university.edu"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="prof-username"
+                  type="text"
+                  autoComplete="username"
+                  placeholder="Enter your username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   className={inputClass}
                 />
               </div>
             </div>
             <div>
-              <label htmlFor="prof-password" className="mb-1.5 block text-sm font-medium text-slate-300">
-                Password
+              <label htmlFor="prof-passcode" className="mb-1.5 block text-sm font-medium text-slate-300">
+                PassCode
               </label>
               <div className="relative">
                 <Lock className="pointer-events-none absolute top-1/2 left-3.5 h-5 w-5 -translate-y-1/2 text-slate-500" />
                 <input
-                  id="prof-password"
+                  id="prof-passcode"
                   type="password"
                   autoComplete="current-password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your passcode"
+                  value={passcode}
+                  onChange={(e) => setPasscode(e.target.value)}
                   className={inputClass}
                 />
               </div>

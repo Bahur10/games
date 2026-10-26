@@ -1,12 +1,11 @@
 import { FlaskConical } from "lucide-react";
 import { isSupabaseConfigured } from "@/lib/supabase";
-import { DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD } from "@/lib/session";
 
 /**
  * Shown only in demo mode (no Supabase env vars) so testers know the data
- * is local and which professor credentials to use.
+ * is stored locally. Login credentials are intentionally never displayed.
  */
-export default function ModeBanner({ showCredentials = false }: { showCredentials?: boolean }) {
+export default function ModeBanner() {
   if (isSupabaseConfigured) return null;
 
   return (
@@ -19,13 +18,6 @@ export default function ModeBanner({ showCredentials = false }: { showCredential
           Supabase, run <code className="rounded bg-black/30 px-1">supabase/schema.sql</code>{" "}
           and set the keys from <code className="rounded bg-black/30 px-1">.env.example</code>.
         </p>
-        {showCredentials && (
-          <p className="mt-2 text-amber-200/80">
-            Demo professor login — email:{" "}
-            <code className="rounded bg-black/30 px-1">{DEMO_ADMIN_EMAIL}</code> · password:{" "}
-            <code className="rounded bg-black/30 px-1">{DEMO_ADMIN_PASSWORD}</code>
-          </p>
-        )}
       </div>
     </div>
   );
