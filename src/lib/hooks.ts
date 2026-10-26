@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getProfessorEmail, getStudentSession } from "./session";
+import { getProfessorUsername, getStudentSession } from "./session";
 import type { StudentSession } from "./types";
 
 /**
@@ -22,18 +22,18 @@ export function useStudentSession(): { session: StudentSession | null; loading: 
 }
 
 /** Same pattern for the professor; Supabase session lookup is async. */
-export function useProfessor(): { email: string | null; loading: boolean } {
-  const [email, setEmail] = useState<string | null>(null);
+export function useProfessor(): { username: string | null; loading: boolean } {
+  const [username, setUsername] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    getProfessorEmail()
+    getProfessorUsername()
       .then((value) => {
-        if (!cancelled) setEmail(value);
+        if (!cancelled) setUsername(value);
       })
       .catch(() => {
-        if (!cancelled) setEmail(null);
+        if (!cancelled) setUsername(null);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -43,5 +43,5 @@ export function useProfessor(): { email: string | null; loading: boolean } {
     };
   }, []);
 
-  return { email, loading };
+  return { username, loading };
 }

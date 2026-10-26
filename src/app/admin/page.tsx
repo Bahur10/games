@@ -45,7 +45,7 @@ interface Notice {
 
 export default function AdminPage() {
   const router = useRouter();
-  const { email, loading: authLoading } = useProfessor();
+  const { username, loading: authLoading } = useProfessor();
 
   const [tab, setTab] = useState<Tab>("questions");
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -62,8 +62,8 @@ export default function AdminPage() {
 
   // ── Guard: professors only ───────────────────────────────────────────────
   useEffect(() => {
-    if (!authLoading && !email) router.replace("/?role=professor");
-  }, [authLoading, email, router]);
+    if (!authLoading && !username) router.replace("/?role=professor");
+  }, [authLoading, username, router]);
 
   const showNotice = useCallback((kind: Notice["kind"], text: string) => {
     setNotice({ kind, text });
@@ -87,8 +87,8 @@ export default function AdminPage() {
   }, [showNotice]);
 
   useEffect(() => {
-    if (!authLoading && email) loadData();
-  }, [authLoading, email, loadData]);
+    if (!authLoading && username) loadData();
+  }, [authLoading, username, loadData]);
 
   // ── Stats ────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -180,7 +180,7 @@ export default function AdminPage() {
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
-  if (authLoading || !email) {
+  if (authLoading || !username) {
     return (
       <div className="flex flex-col items-center gap-3 py-24 text-slate-400">
         <Loader2 className="h-10 w-10 animate-spin" />
@@ -201,7 +201,7 @@ export default function AdminPage() {
             Professor Dashboard
           </h1>
           <p className="mt-1 text-sm text-slate-400">
-            Signed in as <span className="font-semibold text-slate-200">{email}</span>
+            Signed in as <span className="font-semibold text-slate-200">{username}</span>
             {!isSupabaseConfigured && " · demo mode"}
           </p>
         </div>

@@ -38,8 +38,8 @@ npm run dev
 Open http://localhost:3000 — the app runs immediately in **demo mode**: data is stored in the browser (`localStorage`) and seeded with 10 sample questions.
 
 - **Student:** enter any name + ID and play.
-- **Professor (demo):** `professor@example.com` / `admin123`
-  (override via `NEXT_PUBLIC_DEMO_ADMIN_EMAIL` / `NEXT_PUBLIC_DEMO_ADMIN_PASSWORD`)
+- **Professor (demo):** UserName `professor` / PassCode `admin123`
+  (override via `NEXT_PUBLIC_DEMO_ADMIN_USERNAME` / `NEXT_PUBLIC_DEMO_ADMIN_PASSCODE`)
 
 ---
 
@@ -56,7 +56,14 @@ Open http://localhost:3000 — the app runs immediately in **demo mode**: data i
    - 10 seed questions (only inserted if the table is empty — safe to re-run)
 
 ### 2 — Create the professor account
-**Authentication → Users → Add user** → enter the professor's email + password (tick *Auto Confirm User*). Only signed-in users can manage questions.
+The login form asks for a **UserName + PassCode**. Internally the app maps the UserName to the hidden email `<username>@lecture-survivor.com`, so create the account to match:
+
+**Authentication → Users → Add user → Create new user**
+- **Email:** `<username>@lecture-survivor.com` — e.g. for UserName `prof.name`, use `prof.name@lecture-survivor.com`
+- **Password:** the PassCode the professor will type on the site
+- Tick *Auto Confirm User*
+
+The address is internal-only and never receives mail (reset the PassCode from this dashboard if forgotten). The real name/code live only in Supabase Auth — never in the code or UI. Only signed-in users can manage questions.
 
 ### 3 — Add the environment variables
 Copy `.env.example` to `.env.local` and fill in your project keys
