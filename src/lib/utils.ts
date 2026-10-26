@@ -43,3 +43,11 @@ export function formatDateTime(iso: string): string {
     minute: "2-digit",
   });
 }
+
+/**
+ * Normalize free text for forgiving comparisons (student login matching,
+ * duplicate checks): trims, lowercases and collapses inner whitespace.
+ */
+export function normalizeText(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}

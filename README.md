@@ -13,7 +13,7 @@ An interactive survival-quiz web app for university students: **3 lives ❤️, 
 ## ✨ Features
 
 **Student side**
-- Login with **full name + student ID (رقم القيد)** — no password needed
+- Login with **full name + student ID (رقم القيد)** — no password needed. Once the professor fills the class roster, only registered name + ID pairs can join (empty roster = open join)
 - 3 hearts, 10-second countdown per question, "Question X of 10" progress
 - Scoring: 100 points per correct answer **+ time bonus** (10 pts per second left)
 - Wrong answer / timeout → lose a heart + read the explanation before continuing
@@ -24,6 +24,7 @@ An interactive survival-quiz web app for university students: **3 lives ❤️, 
 - Add / edit / delete questions (question text, 4 options, correct answer, explanation)
 - Live table of every question with the correct answer highlighted
 - Student results table (name, ID, score, correct answers, lives left, date) with delete / clear-all
+- **Class roster**: register students (full name + Student ID) one-by-one or in bulk by pasting a list — gates student login to your class
 - Dashboard stats: question count, attempts, average & highest score
 
 ---
@@ -52,6 +53,7 @@ Open http://localhost:3000 — the app runs immediately in **demo mode**: data i
    It creates:
    - `questions` — `id, question_text, options (jsonb), correct_option_index, explanation, created_at`
    - `student_scores` — `id, student_name, student_id, score, lives_left, correct_answers, completed_at`
+   - `students` — `id, full_name, student_id, created_at` (class roster; unique Student ID)
    - Row Level Security policies (students: read questions + submit/read scores; professor: full CRUD)
    - 10 seed questions (only inserted if the table is empty — safe to re-run)
 
@@ -109,7 +111,7 @@ src/
   components/
     Header.tsx · ModeBanner.tsx · LeaderboardTable.tsx
     game/  Hearts · TimerBar · QuestionCard · FeedbackPanel · ResultScreen · gameReducer
-    admin/ QuestionForm · QuestionsTable · ResultsTable
+    admin/ QuestionForm · QuestionsTable · ResultsTable · StudentForm · StudentsTable · BulkAddStudents
   lib/
     config.ts    ← game rules
     types.ts     ← Question / StudentScore types
@@ -130,4 +132,4 @@ src/
 
 ## 🔒 Security note
 
-RLS is enabled on both tables: the public `anon` key can only **read** questions and **insert/read** scores; creating, editing or deleting questions requires the professor's authenticated session. Because students fetch questions directly, a technically skilled student could inspect the network response to see `correct_option_index` — fine for a classroom challenge; for graded exams, move answer-checking behind a server-side RPC.
+RLS is enabled on all tables: the public `anon` key can only **read** questions and the student roster (needed for the pre-login check — the same names/IDs the public leaderboard already shows) and **insert/read** scores; creating, editing or deleting questions or roster entries requires the professor's authenticated session. Because students fetch questions directly, a technically skilled student could inspect the network response to see `correct_option_index` — fine for a classroom challenge; for graded exams, move answer-checking behind a server-side RPC.

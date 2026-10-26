@@ -183,6 +183,56 @@ from seed
 where not exists (select 1 from public.questions);
 
 -- ═══════════════════════════════════════════════════════════════════════════
+--  Students (class roster) — managed from /admin → Students tab
+--  • While this table is EMPTY, any student can join with any name + ID.
+--  • Once it contains students, the login page only accepts registered
+--    name + Student ID (الكود / رقم القيد) pairs.
+--  The login check runs before sign-in with the public anon key, so the
+--  roster is readable by everyone — the same visibility as the public
+--  leaderboard, which already shows student names + IDs.
+-- ═══════════════════════════════════════════════════════════════════════════
+create table if not exists public.students (
+  id         uuid primary key default gen_random_uuid(),
+  full_name  text not null check (char_length(trim(full_name)) > 0),
+  student_id text not null check (char_length(trim(student_id)) > 0),
+  created_at timestamptz not null default now()
+);
+
+-- One roster entry per Student ID (case-insensitive).
+create unique index if not exists idx_students_student_id_unique
+  on public.students (lower(student_id));
+
+create index if not exists idx_students_full_name
+  on public.students (full_name asc);
+
+alter table public.students enable row level security;
+
+drop policy if exists "Students are viewable by everyone" on public.students;
+drop policy if exists "Professors can insert students"    on public.students;
+drop policy if exists "Professors can update students"    on public.students;
+drop policy if exists "Professors can delete students"    on public.students;
+
+create policy "Students are viewable by everyone"
+  on public.students for select
+  using (true);
+
+create policy "Professors can insert students"
+  on public.students for insert
+  to authenticated
+  with check (true);
+
+create policy "Professors can update students"
+  on public.students for update
+  to authenticated
+  using (true)
+  with check (true);
+
+create policy "Professors can delete students"
+  on public.students for delete
+  to authenticated
+  using (true);
+
+-- ═══════════════════════════════════════════════════════════════════════════
 --  Security note (optional hardening):
 --  Because students read the `questions` table directly, a technical
 --  student could inspect the network response and see

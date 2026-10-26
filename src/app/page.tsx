@@ -20,9 +20,11 @@ import {
 
 import ModeBanner from "@/components/ModeBanner";
 import { QUESTION_TIME_SECONDS, QUESTIONS_PER_RUN, STARTING_LIVES } from "@/lib/config";
+import { fetchStudents } from "@/lib/data";
 import { useStudentSession } from "@/lib/hooks";
 import { clearStudentSession, loginProfessor, saveStudentSession } from "@/lib/session";
-import { cn } from "@/lib/utils";
+import type { Student } from "@/lib/types";
+import { cn, normalizeText } from "@/lib/utils";
 
 type Role = "student" | "professor";
 
@@ -39,6 +41,7 @@ export default function LoginPage() {
   const [studentName, setStudentName] = useState("");
   const [studentId, setStudentId] = useState("");
   const [studentError, setStudentError] = useState<string | null>(null);
+  const [checkingStudent, setCheckingStudent] = useState(false);
 
   // Professor form
   const [username, setUsername] = useState("");
@@ -54,7 +57,7 @@ export default function LoginPage() {
     }
   }, []);
 
-  function handleStudentSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleStudentSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = studentName.trim();
     const id = studentId.trim();
@@ -66,8 +69,46 @@ export default function LoginPage() {
       setStudentError("Please enter your student ID number.");
       return;
     }
-    saveStudentSession({ name, studentId: id });
-    router.push("/game");
+
+    setStudentError(null);
+    setCheckingStudent(true);
+    try {
+      // Roster gate: while the professor's roster is empty anyone may join.
+      // Once students are registered, only a matching name + ID pair gets in.
+      // If the roster cannot be loaded (e.g. table not created yet), we fall
+      // back to open join instead of locking every student out.
+      let roster: Student[] = [];
+      try {
+        roster = await fetchStudents();
+      } catch {
+        roster = [];
+      }
+
+      if (roster.length > 0) {
+        const registered = roster.find(
+          (s) => normalizeText(s.student_id) === normalizeText(id),
+        );
+        if (!registered) {
+          setStudentError(
+            "This Student ID is not registered. Please ask your professor to add you to the class list.",
+          );
+          return;
+        }
+        if (normalizeText(registered.full_name) !== normalizeText(name)) {
+          setStudentError(
+            "The name does not match the registered name for this Student ID. Type your name exactly as your professor registered it.",
+          );
+          return;
+        }
+        // Use the registered (canonical) name/ID for a clean leaderboard.
+        saveStudentSession({ name: registered.full_name, studentId: registered.student_id });
+      } else {
+        saveStudentSession({ name, studentId: id });
+      }
+      router.push("/game");
+    } finally {
+      setCheckingStudent(false);
+    }
   }
 
   async function handleProfessorSubmit(event: FormEvent<HTMLFormElement>) {
@@ -221,13 +262,19 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 py-3.5 font-bold text-white shadow-lg shadow-indigo-500/25 transition hover:brightness-110 active:scale-[0.98]"
+              disabled={checkingStudent}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 py-3.5 font-bold text-white shadow-lg shadow-indigo-500/25 transition hover:brightness-110 active:scale-[0.98] disabled:opacity-60"
             >
-              <Play className="h-5 w-5 fill-white" />
-              Enter the challenge
+              {checkingStudent ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Play className="h-5 w-5 fill-white" />
+              )}
+              {checkingStudent ? "Checking…" : "Enter the challenge"}
             </button>
             <p className="text-center text-xs text-slate-500">
-              No password needed — your name and ID appear on the leaderboard.
+              Use the name and Student ID your professor registered for you — they appear on
+              the leaderboard.
             </p>
           </form>
         ) : (
