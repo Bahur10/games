@@ -8,7 +8,15 @@
  */
 import { supabase, isSupabaseConfigured } from "./supabase";
 import { SEED_QUESTIONS } from "./seed";
-import type { Question, QuestionInput, ScoreInput, StudentScore } from "./types";
+import { normalizeText } from "./utils";
+import type {
+  Question,
+  QuestionInput,
+  ScoreInput,
+  Student,
+  StudentInput,
+  StudentScore,
+} from "./types";
 
 // ─── Demo-mode storage helpers ─────────────────────────────────────────────
 const QUESTIONS_KEY = "lecture-survivor:questions:v1";
@@ -179,4 +187,139 @@ export async function clearAllScores(): Promise<void> {
     .delete()
     .neq("id", "00000000-0000-0000-0000-000000000000");
   if (error) throw new Error(error.message);
+}
+
+// ─── Students (class roster) ───────────────────────────────────────────────
+const STUDENTS_KEY = "lecture-survivor:students:v1";
+
+function getLocalStudents(): Student[] {
+  return readLocal<Student[]>(STUDENTS_KEY, []);
+}
+
+/** Alphabetical by name (then ID) — stable order for the admin table. */
+export function sortStudents(students: Student[]): Student[] {
+  return [...students].sort(
+    (a, b) =>
+      a.full_name.localeCompare(b.full_name) || a.student_id.localeCompare(b.student_id),
+  );
+}
+
+function cleanStudentInput(input: StudentInput): StudentInput {
+  return { full_name: input.full_name.trim(), student_id: input.student_id.trim() };
+}
+
+function assertIdAvailable(
+  students: Student[],
+  studentId: string,
+  excludeId: string | null = null,
+): void {
+  const clash = students.find(
+    (s) => s.id !== excludeId && normalizeText(s.student_id) === normalizeText(studentId),
+  );
+  if (clash) {
+    throw new Error(`Student ID "${studentId}" is already registered for ${clash.full_name}.`);
+  }
+}
+
+/** Map a Postgres unique-violation to a friendly, consistent message. */
+function friendlyStudentError(message: string): Error {
+  return new Error(
+    message.toLowerCase().includes("duplicate key")
+      ? "This Student ID is already registered."
+      : message,
+  );
+}
+
+export async function fetchStudents(): Promise<Student[]> {
+  if (!isSupabaseConfigured || !supabase) return sortStudents(getLocalStudents());
+  const data = unwrap(
+    await supabase.from("students").select("*").order("full_name", { ascending: true }),
+  );
+  return data as Student[];
+}
+
+export async function createStudent(input: StudentInput): Promise<Student> {
+  const clean = cleanStudentInput(input);
+  if (!isSupabaseConfigured || !supabase) {
+    const students = getLocalStudents();
+    assertIdAvailable(students, clean.student_id);
+    const student: Student = { ...clean, id: newId(), created_at: new Date().toISOString() };
+    writeLocal(STUDENTS_KEY, [...students, student]);
+    return student;
+  }
+  const { data, error } = await supabase.from("students").insert(clean).select("*");
+  if (error) throw friendlyStudentError(error.message);
+  return (data as Student[])[0];
+}
+
+export async function updateStudent(id: string, input: StudentInput): Promise<Student> {
+  const clean = cleanStudentInput(input);
+  if (!isSupabaseConfigured || !supabase) {
+    const students = getLocalStudents();
+    const index = students.findIndex((s) => s.id === id);
+    if (index === -1) throw new Error("Student not found.");
+    assertIdAvailable(students, clean.student_id, id);
+    const updated: Student = { ...students[index], ...clean };
+    students[index] = updated;
+    writeLocal(STUDENTS_KEY, students);
+    return updated;
+  }
+  const { data, error } = await supabase
+    .from("students")
+    .update(clean)
+    .eq("id", id)
+    .select("*");
+  if (error) throw friendlyStudentError(error.message);
+  const rows = data as Student[];
+  if (rows.length === 0) throw new Error("Student not found or not permitted.");
+  return rows[0];
+}
+
+export async function deleteStudent(id: string): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) {
+    writeLocal(
+      STUDENTS_KEY,
+      getLocalStudents().filter((s) => s.id !== id),
+    );
+    return;
+  }
+  const { error } = await supabase.from("students").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export interface BulkStudentsResult {
+  added: Student[];
+  /** Entries skipped because the Student ID was already on the roster (or repeated). */
+  skipped: number;
+}
+
+/** Add many students at once, silently skipping duplicate Student IDs. */
+export async function createStudentsBulk(inputs: StudentInput[]): Promise<BulkStudentsResult> {
+  const existing = await fetchStudents();
+  const seen = new Set(existing.map((s) => normalizeText(s.student_id)));
+  const fresh: StudentInput[] = [];
+  let skipped = 0;
+
+  for (const raw of inputs) {
+    const clean = cleanStudentInput(raw);
+    const key = normalizeText(clean.student_id);
+    if (!clean.full_name || !clean.student_id || seen.has(key)) {
+      skipped++;
+      continue;
+    }
+    seen.add(key);
+    fresh.push(clean);
+  }
+
+  if (fresh.length === 0) return { added: [], skipped };
+
+  if (!isSupabaseConfigured || !supabase) {
+    const now = new Date().toISOString();
+    const added: Student[] = fresh.map((s) => ({ ...s, id: newId(), created_at: now }));
+    writeLocal(STUDENTS_KEY, [...getLocalStudents(), ...added]);
+    return { added, skipped };
+  }
+  const { data, error } = await supabase.from("students").insert(fresh).select("*");
+  if (error) throw friendlyStudentError(error.message);
+  return { added: data as Student[], skipped };
 }

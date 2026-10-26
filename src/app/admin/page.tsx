@@ -3,12 +3,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   BarChart3,
   CheckCircle2,
   Eraser,
+  GraduationCap,
+  Info,
   ListChecks,
   Loader2,
   LogOut,
+  RefreshCw,
   RotateCcw,
   ShieldCheck,
   Trophy,
@@ -16,27 +20,36 @@ import {
 } from "lucide-react";
 
 import ModeBanner from "@/components/ModeBanner";
+import BulkAddStudents from "@/components/admin/BulkAddStudents";
 import QuestionForm from "@/components/admin/QuestionForm";
 import QuestionsTable from "@/components/admin/QuestionsTable";
 import ResultsTable from "@/components/admin/ResultsTable";
+import StudentForm from "@/components/admin/StudentForm";
+import StudentsTable from "@/components/admin/StudentsTable";
 
 import {
   clearAllScores,
   createQuestion,
+  createStudent,
+  createStudentsBulk,
   deleteQuestion,
   deleteScore,
+  deleteStudent,
   fetchQuestions,
   fetchScores,
+  fetchStudents,
   resetDemoQuestions,
+  sortStudents,
   updateQuestion,
+  updateStudent,
 } from "@/lib/data";
 import { useProfessor } from "@/lib/hooks";
 import { logoutProfessor } from "@/lib/session";
 import { isSupabaseConfigured } from "@/lib/supabase";
-import type { Question, QuestionInput, StudentScore } from "@/lib/types";
+import type { Question, QuestionInput, Student, StudentInput, StudentScore } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-type Tab = "questions" | "results";
+type Tab = "questions" | "students" | "results";
 
 interface Notice {
   kind: "success" | "error";
@@ -50,15 +63,22 @@ export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("questions");
   const [questions, setQuestions] = useState<Question[]>([]);
   const [scores, setScores] = useState<StudentScore[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [studentsError, setStudentsError] = useState<string | null>(null);
   const [loadingData, setLoadingData] = useState(true);
 
   const [editing, setEditing] = useState<Question | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingQuestionId, setDeletingQuestionId] = useState<string | null>(null);
   const [deletingScoreId, setDeletingScoreId] = useState<string | null>(null);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [savingStudent, setSavingStudent] = useState(false);
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [deletingStudentId, setDeletingStudentId] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const formRef = useRef<HTMLDivElement>(null);
+  const studentFormRef = useRef<HTMLDivElement>(null);
 
   // ── Guard: professors only ───────────────────────────────────────────────
   useEffect(() => {
@@ -81,6 +101,17 @@ export default function AdminPage() {
       setScores(loadedScores);
     } catch (err) {
       showNotice("error", err instanceof Error ? err.message : "Failed to load data.");
+    }
+    // The roster loads independently: if its table does not exist yet
+    // (SQL not run), the rest of the dashboard must keep working.
+    try {
+      setStudents(await fetchStudents());
+      setStudentsError(null);
+    } catch {
+      setStudents([]);
+      setStudentsError(
+        "The students table could not be loaded. If you just updated the app, run the students section of supabase/schema.sql in the Supabase SQL Editor, then refresh.",
+      );
     } finally {
       setLoadingData(false);
     }
@@ -146,6 +177,84 @@ export default function AdminPage() {
     setQuestions(await resetDemoQuestions());
     setEditing(null);
     showNotice("success", "Sample questions restored.");
+  }
+
+  // ── Student roster handlers ──────────────────────────────────────────────
+  async function handleStudentSubmit(input: StudentInput) {
+    setSavingStudent(true);
+    try {
+      if (editingStudent) {
+        const updated = await updateStudent(editingStudent.id, input);
+        setStudents((prev) =>
+          sortStudents(prev.map((s) => (s.id === updated.id ? updated : s))),
+        );
+        setEditingStudent(null);
+        showNotice("success", "Student updated successfully.");
+      } else {
+        const created = await createStudent(input);
+        setStudents((prev) => sortStudents([...prev, created]));
+        showNotice("success", `${created.full_name} added to the roster.`);
+      }
+    } catch (err) {
+      showNotice("error", err instanceof Error ? err.message : "Could not save the student.");
+    } finally {
+      setSavingStudent(false);
+    }
+  }
+
+  function handleEditStudent(student: Student) {
+    setEditingStudent(student);
+    studentFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function handleDeleteStudent(student: Student) {
+    if (
+      !window.confirm(
+        `Remove “${student.full_name}” (${student.student_id}) from the roster?\n\nThey will no longer be able to log in. Their past results are kept.`,
+      )
+    )
+      return;
+    setDeletingStudentId(student.id);
+    try {
+      await deleteStudent(student.id);
+      setStudents((prev) => prev.filter((s) => s.id !== student.id));
+      if (editingStudent?.id === student.id) setEditingStudent(null);
+      showNotice("success", "Student removed from the roster.");
+    } catch (err) {
+      showNotice("error", err instanceof Error ? err.message : "Could not delete the student.");
+    } finally {
+      setDeletingStudentId(null);
+    }
+  }
+
+  async function handleBulkAdd(inputs: StudentInput[], invalidLines: number): Promise<boolean> {
+    setBulkSaving(true);
+    try {
+      const { added, skipped } = await createStudentsBulk(inputs);
+      if (added.length > 0) {
+        setStudents((prev) => sortStudents([...prev, ...added]));
+      }
+      const skippedTotal = skipped + invalidLines;
+      if (added.length === 0) {
+        showNotice(
+          "error",
+          "No new students were added — every line was a duplicate or incomplete.",
+        );
+        return false;
+      }
+      showNotice(
+        "success",
+        `Added ${added.length} student${added.length > 1 ? "s" : ""} to the roster.${
+          skippedTotal > 0 ? ` ${skippedTotal} line(s) skipped (duplicates or incomplete).` : ""
+        }`,
+      );
+      return true;
+    } catch (err) {
+      showNotice("error", err instanceof Error ? err.message : "Could not add the students.");
+      return false;
+    } finally {
+      setBulkSaving(false);
+    }
   }
 
   // ── Score handlers ───────────────────────────────────────────────────────
@@ -247,18 +356,30 @@ export default function AdminPage() {
       </div>
 
       {/* Tabs */}
-      <div className="mb-5 grid grid-cols-2 gap-1 rounded-2xl bg-slate-900/80 p-1" role="tablist">
+      <div className="mb-5 grid grid-cols-3 gap-1 rounded-2xl bg-slate-900/80 p-1" role="tablist">
         <button
           type="button"
           role="tab"
           aria-selected={tab === "questions"}
           onClick={() => setTab("questions")}
           className={cn(
-            "flex items-center justify-center gap-2 rounded-xl py-2.5 font-semibold transition",
+            "flex items-center justify-center gap-1.5 rounded-xl px-1 py-2.5 text-sm font-semibold transition sm:gap-2 sm:text-base",
             tab === "questions" ? "bg-indigo-500 text-white shadow" : "text-slate-400 hover:text-white",
           )}
         >
-          <ListChecks className="h-5 w-5" /> Questions ({questions.length})
+          <ListChecks className="h-5 w-5 shrink-0" /> Questions ({questions.length})
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "students"}
+          onClick={() => setTab("students")}
+          className={cn(
+            "flex items-center justify-center gap-1.5 rounded-xl px-1 py-2.5 text-sm font-semibold transition sm:gap-2 sm:text-base",
+            tab === "students" ? "bg-indigo-500 text-white shadow" : "text-slate-400 hover:text-white",
+          )}
+        >
+          <GraduationCap className="h-5 w-5 shrink-0" /> Students ({students.length})
         </button>
         <button
           type="button"
@@ -266,11 +387,11 @@ export default function AdminPage() {
           aria-selected={tab === "results"}
           onClick={() => setTab("results")}
           className={cn(
-            "flex items-center justify-center gap-2 rounded-xl py-2.5 font-semibold transition",
+            "flex items-center justify-center gap-1.5 rounded-xl px-1 py-2.5 text-sm font-semibold transition sm:gap-2 sm:text-base",
             tab === "results" ? "bg-indigo-500 text-white shadow" : "text-slate-400 hover:text-white",
           )}
         >
-          <Users className="h-5 w-5" /> Student results ({scores.length})
+          <Users className="h-5 w-5 shrink-0" /> Results ({scores.length})
         </button>
       </div>
 
@@ -316,6 +437,64 @@ export default function AdminPage() {
             onEdit={handleEditQuestion}
             onDelete={handleDeleteQuestion}
           />
+        </div>
+      ) : tab === "students" ? (
+        <div className="animate-fade-up space-y-6">
+          {/* How roster-gated login works */}
+          <div className="flex items-start gap-3 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-4 text-sm text-sky-200">
+            <Info className="mt-0.5 h-5 w-5 shrink-0 text-sky-400" />
+            <p>
+              <span className="font-semibold text-white">How student access works: </span>
+              while the roster is <strong>empty</strong>, any student can join with any name +
+              ID. As soon as you add students here, only a registered{" "}
+              <strong>name + Student ID</strong> pair can log in — the name must be typed as
+              registered (capitals and extra spaces don&apos;t matter).
+            </p>
+          </div>
+
+          {studentsError ? (
+            <div className="rounded-3xl border border-rose-500/40 bg-rose-500/10 p-6 text-center">
+              <AlertTriangle className="mx-auto h-9 w-9 text-rose-400" />
+              <p className="mx-auto mt-3 max-w-md text-sm text-rose-200/90">{studentsError}</p>
+              <button
+                type="button"
+                onClick={loadData}
+                className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-500"
+              >
+                <RefreshCw className="h-4 w-4" /> Try again
+              </button>
+            </div>
+          ) : (
+            <>
+              <div ref={studentFormRef} className="scroll-mt-24">
+                {/* `key` re-mounts the form so its fields reset for add vs. edit */}
+                <StudentForm
+                  key={editingStudent?.id ?? "new-student"}
+                  editing={editingStudent}
+                  students={students}
+                  saving={savingStudent}
+                  onSubmit={handleStudentSubmit}
+                  onCancelEdit={() => setEditingStudent(null)}
+                />
+              </div>
+
+              <BulkAddStudents saving={bulkSaving} onBulkAdd={handleBulkAdd} />
+
+              <h2 className="text-lg font-bold text-white">
+                Registered students{" "}
+                <span className="text-sm font-medium text-slate-500">
+                  — {students.length} total
+                </span>
+              </h2>
+
+              <StudentsTable
+                students={students}
+                deletingId={deletingStudentId}
+                onEdit={handleEditStudent}
+                onDelete={handleDeleteStudent}
+              />
+            </>
+          )}
         </div>
       ) : (
         <div className="animate-fade-up space-y-4">

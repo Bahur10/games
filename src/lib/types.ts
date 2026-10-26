@@ -41,3 +41,15 @@ export interface StudentSession {
   name: string;
   studentId: string;
 }
+
+/** One registered student on the class roster, stored in `students`. */
+export interface Student {
+  id: string;
+  full_name: string;
+  /** رقم القيد — the code the student types together with their name to log in. */
+  student_id: string;
+  created_at: string;
+}
+
+/** Payload used when the professor adds / edits a roster entry. */
+export type StudentInput = Pick<Student, "full_name" | "student_id">;
